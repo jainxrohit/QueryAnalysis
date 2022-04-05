@@ -16,7 +16,7 @@ import static com.facebook.presto.sql.parser.ParsingOptions.DecimalLiteralTreatm
 public class MVAnalysis
 {
     public static String FILE_NAME = "/Users/rohitism/work/prestosql/mv_analysis/unidash_simple_20.csv";
-    public static String DELIMITER = "QUERY_END_STR->";
+    public static String DELIMITER = "__DEL__";
     public static final SqlParser sqlParser = new SqlParser(new SqlParserOptions().allowIdentifierSymbol(AT_SIGN, COLON));
     public static ParsingOptions parsingOptions = ParsingOptions.builder().setDecimalLiteralTreatment(AS_DECIMAL).build();
 
@@ -56,7 +56,7 @@ public class MVAnalysis
     private void parseQuery(String queryId, String query)
     {
         try {
-            System.out.println("ID=> " + queryId);
+//            System.out.println("ID=> " + queryId);
             Statement statement = sqlParser.createStatement(query, parsingOptions);
             MVVisitor mvVisitor = new MVVisitor();
             mvVisitor.extract(statement, queryId);

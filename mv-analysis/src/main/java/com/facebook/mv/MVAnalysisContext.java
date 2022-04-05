@@ -1,5 +1,6 @@
 package com.facebook.mv;
 
+import java.io.BufferedWriter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -9,8 +10,8 @@ public final class MVAnalysisContext
 {
     public String queryId;
     public List<String> selectFields;
-    public Set<String> whereFields;
-    public final Map<String, List<String>> tableToSelects = new HashMap<>();
+    public Set<String> candidateFields;
     public String tableName;
-    public StringBuilder queryInfoBuilder;
+    public BufferedWriter errorsWriter;
+    public BufferedWriter resultWriter;
 }

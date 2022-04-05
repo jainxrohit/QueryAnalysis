@@ -1,49 +1,48 @@
 package com.facebook.mv;
 
-import com.facebook.presto.sql.tree.ComparisonExpression;
+import com.facebook.presto.sql.tree.AliasedRelation;
 import com.facebook.presto.sql.tree.DefaultTraversalVisitor;
 import com.facebook.presto.sql.tree.Expression;
 import com.facebook.presto.sql.tree.FunctionCall;
 import com.facebook.presto.sql.tree.GroupBy;
 import com.facebook.presto.sql.tree.GroupingElement;
 import com.facebook.presto.sql.tree.Identifier;
-import com.facebook.presto.sql.tree.LogicalBinaryExpression;
 import com.facebook.presto.sql.tree.LongLiteral;
 import com.facebook.presto.sql.tree.Node;
 import com.facebook.presto.sql.tree.OrderBy;
 import com.facebook.presto.sql.tree.Query;
 import com.facebook.presto.sql.tree.QuerySpecification;
+import com.facebook.presto.sql.tree.Relation;
 import com.facebook.presto.sql.tree.Select;
 import com.facebook.presto.sql.tree.SelectItem;
 import com.facebook.presto.sql.tree.SingleColumn;
 import com.facebook.presto.sql.tree.SubqueryExpression;
 import com.facebook.presto.sql.tree.Table;
 
+import java.io.BufferedWriter;
+import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.TreeSet;
 
 import static com.facebook.mv.MVAnalysis.DELIMITER;
+import static java.lang.String.format;
 
 public class MVVisitor
         extends DefaultTraversalVisitor<Void, MVAnalysisContext>
 {
-    boolean isTableVisited = false;
-    boolean isGroupByVisited = false;
-
     public MVVisitor()
     {
     }
 
-    public void extract(Node node, String queryId)
+    public void extract(Node node, String queryId, BufferedWriter resultWriter, BufferedWriter errorsWriter)
     {
         MVAnalysisContext mvAnalysisContext = new MVAnalysisContext();
         mvAnalysisContext.queryId = queryId;
-        mvAnalysisContext.queryInfoBuilder = new StringBuilder();
-        mvAnalysisContext.queryInfoBuilder.append(mvAnalysisContext.queryId).append(DELIMITER);
+        mvAnalysisContext.resultWriter = resultWriter;
+        mvAnalysisContext.errorsWriter = errorsWriter;
         this.process(node, mvAnalysisContext);
-        System.out.println(mvAnalysisContext.queryInfoBuilder);
     }
 
     @Override
@@ -62,34 +61,67 @@ public class MVVisitor
             throw new RuntimeException("Found Limit for query: " + context.queryId);
         }
 
-        if(context.queryId.equalsIgnoreCase("20220329_180035_72310_vac2i")) {
-            int i=1;
+        Optional<Relation> from = node.getFrom();
+        if (from.isPresent()) {
+            if (from.get() instanceof Table) {
+                process(from.get(), context);
+            }
+            else if (from.get() instanceof AliasedRelation) {
+                AliasedRelation aliasedRelation = (AliasedRelation) from.get();
+                if (aliasedRelation.getRelation() instanceof Table) {
+                    process(aliasedRelation.getRelation(), context);
+                }
+            }
+            else {
+                throw new RuntimeException(format("[%s] Unsupported from relation: %s", context.queryId, from.get()));
+            }
         }
+
+        Select select = node.getSelect();
+        process(select, context);
+
+        context.candidateFields = new TreeSet<>();
         Optional<Expression> where = node.getWhere();
-        if(where.isPresent()) {
-            context.whereFields = new TreeSet<>();
+        if (where.isPresent()) {
             Expression expression = where.get();
             process(expression, context);
-            context.queryInfoBuilder.append("__WHERE__");
-            for (String f : context.whereFields) {
-                context.queryInfoBuilder.append(f).append(DELIMITER);
-            }
-
-            context.queryInfoBuilder.append("__WHERE__");
-
         }
-        return super.visitQuerySpecification(node, context);
+
+        if (node.getGroupBy().isPresent()) {
+            GroupBy groupBy = node.getGroupBy().get();
+            process(groupBy, context);
+        }
+
+        if (context.tableName != null && !context.candidateFields.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            sb.append(context.queryId).append(DELIMITER);
+
+            sb.append(context.tableName).append(DELIMITER);
+            for (String candidateField : context.candidateFields) {
+                sb.append(candidateField).append(DELIMITER);
+            }
+            sb.append('\n');
+            try {
+                context.resultWriter.write(sb.toString());
+            }
+            catch (IOException e) {
+                throw new RuntimeException("Failed to write to file");
+            }
+        }
+
+        return null;
     }
 
     @Override
-    protected Void visitIdentifier(Identifier node, MVAnalysisContext context) {
-        context.whereFields.add(node.getValue());
+    protected Void visitIdentifier(Identifier node, MVAnalysisContext context)
+    {
+        context.candidateFields.add(node.getValue());
         return super.visitIdentifier(node, context);
     }
 
-
     @Override
-    protected Void visitFunctionCall(FunctionCall node, MVAnalysisContext context) {
+    protected Void visitFunctionCall(FunctionCall node, MVAnalysisContext context)
+    {
         return super.visitFunctionCall(node, context);
     }
 
@@ -107,32 +139,13 @@ public class MVVisitor
 
     public Void visitTable(Table node, MVAnalysisContext context)
     {
-        if (context.queryId.equalsIgnoreCase("20220330_053030_00649_txytk")) {
-            int i = 1;
-        }
-
-        if (isTableVisited) {
-            throw new RuntimeException("Multiple tables found!! Skipping query: " + context.queryId);
-        }
-        isTableVisited = true;
         context.tableName = node.getName().toString();
-        context.queryInfoBuilder.append(context.tableName).append(DELIMITER);
-        if (context.tableToSelects.containsKey(context.tableName)) {
-            System.err.printf("Multiple visit for the same table: %s, for the query: %s\n", context.tableName, context.queryId);
-        }
-        else {
-            context.tableToSelects.put(context.tableName, context.selectFields);
-        }
-
-        return super.visitTable(node, context);
+        return null;
     }
 
     @Override
     protected Void visitSelect(Select select, MVAnalysisContext context)
     {
-        if (context.queryId.equalsIgnoreCase("20220330_053030_00649_txytk")) {
-            int i = 0;
-        }
         context.selectFields = new LinkedList<>();
 
         List<SelectItem> selectItems = select.getSelectItems();
@@ -150,37 +163,25 @@ public class MVVisitor
                 context.selectFields.add(selectItem.toString());
             }
         }
-        return super.visitSelect(select, context);
+        return null;
     }
 
     @Override
     protected Void visitGroupBy(GroupBy groupBy, MVAnalysisContext context)
     {
-        if (context.queryId.equalsIgnoreCase("20220330_053030_00649_txytk")) {
-            int i = 1;
-        }
-
-        if (isGroupByVisited) {
-            throw new RuntimeException("Multiple Group By found!! Skipping query: " + context.queryId);
-        }
-
-        isGroupByVisited = true;
-
-        context.queryInfoBuilder.append("__GROUP__");
         if (!groupBy.getGroupingElements().isEmpty()) {
             for (GroupingElement groupingElement : groupBy.getGroupingElements()) {
                 List<Expression> expressions = groupingElement.getExpressions();
                 for (Expression expression : expressions) {
                     if (expression instanceof LongLiteral) {
-                        context.queryInfoBuilder.append(context.selectFields.get((int) ((LongLiteral) expression).getValue() - 1)).append(DELIMITER);
+                        context.candidateFields.add(context.selectFields.get((int) ((LongLiteral) expression).getValue() - 1));
                     }
                     else {
-                        context.queryInfoBuilder.append(expression).append(DELIMITER);
+                        context.candidateFields.add(expression.toString());
                     }
                 }
             }
         }
-        context.queryInfoBuilder.append("__GROUP__");
 
         return super.visitGroupBy(groupBy, context);
     }

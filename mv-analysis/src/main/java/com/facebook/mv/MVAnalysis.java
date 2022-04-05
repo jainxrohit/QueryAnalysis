@@ -3,6 +3,7 @@ package com.facebook.mv;
 import com.facebook.presto.sql.parser.ParsingOptions;
 import com.facebook.presto.sql.parser.SqlParser;
 import com.facebook.presto.sql.parser.SqlParserOptions;
+import com.facebook.presto.sql.tree.Statement;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -11,7 +12,6 @@ import java.io.IOException;
 import static com.facebook.presto.sql.parser.IdentifierSymbol.AT_SIGN;
 import static com.facebook.presto.sql.parser.IdentifierSymbol.COLON;
 import static com.facebook.presto.sql.parser.ParsingOptions.DecimalLiteralTreatment.AS_DECIMAL;
-import static com.facebook.presto.sql.parser.ParsingOptions.DecimalLiteralTreatment.AS_DOUBLE;
 
 public class MVAnalysis
 {
@@ -21,6 +21,12 @@ public class MVAnalysis
     public static ParsingOptions parsingOptions = ParsingOptions.builder().setDecimalLiteralTreatment(AS_DECIMAL).build();
 
     public static void main(String[] args)
+    {
+        MVAnalysis mvAnalysis = new MVAnalysis();
+        mvAnalysis.process();
+    }
+
+    private void process()
     {
         BufferedReader reader;
         try {
@@ -47,15 +53,16 @@ public class MVAnalysis
         }
     }
 
-    private static void parseQuery(String queryId, String query)
+    private void parseQuery(String queryId, String query)
     {
         try {
             System.out.println("ID=> " + queryId);
-//        System.out.println("Query=> " + query);
-            sqlParser.createStatement(query, parsingOptions);
+            Statement statement = sqlParser.createStatement(query, parsingOptions);
+            MVVisitor mvVisitor = new MVVisitor();
+            mvVisitor.extract(statement, queryId);
         }
         catch (Exception ex) {
-            System.err.println(String.format("Failed to parse query(%s), with following exception: (%s)", queryId, ex.getMessage()));
+            System.err.printf("Failed to parse query(%s), with following exception: (%s)%n", queryId, ex);
         }
     }
 }

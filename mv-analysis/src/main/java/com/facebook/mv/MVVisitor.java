@@ -3,7 +3,6 @@ package com.facebook.mv;
 import com.facebook.presto.sql.tree.AliasedRelation;
 import com.facebook.presto.sql.tree.DefaultTraversalVisitor;
 import com.facebook.presto.sql.tree.Expression;
-import com.facebook.presto.sql.tree.FunctionCall;
 import com.facebook.presto.sql.tree.GroupBy;
 import com.facebook.presto.sql.tree.GroupingElement;
 import com.facebook.presto.sql.tree.Identifier;
@@ -30,46 +29,46 @@ import static com.facebook.mv.MVAnalysis.DELIMITER;
 import static java.lang.String.format;
 
 public class MVVisitor
-        extends DefaultTraversalVisitor<Void, MVAnalysisContext>
+        extends DefaultTraversalVisitor<Void, Void>
 {
+    MVAnalysisContext context = new MVAnalysisContext();
     public MVVisitor()
     {
     }
 
     public void extract(Node node, String queryId, BufferedWriter resultWriter, BufferedWriter errorsWriter)
     {
-        MVAnalysisContext mvAnalysisContext = new MVAnalysisContext();
-        mvAnalysisContext.queryId = queryId;
-        mvAnalysisContext.resultWriter = resultWriter;
-        mvAnalysisContext.errorsWriter = errorsWriter;
-        this.process(node, mvAnalysisContext);
+        if (queryId.equalsIgnoreCase("20220328_131724_09160_dtzbu")) {
+            System.out.println("found");
+        }
+        context.queryId = queryId;
+        context.resultWriter = resultWriter;
+        context.errorsWriter = errorsWriter;
+        this.process(node);
     }
 
     @Override
-    protected Void visitQuery(Query node, MVAnalysisContext context)
+    protected Void visitQuery(Query node, Void c)
     {
-        if (node.getLimit().isPresent()) {
-            throw new RuntimeException("Found Limit for query: " + context.queryId);
-        }
-        return super.visitQuery(node, context);
+        return super.visitQuery(node, c);
     }
 
     @Override
-    protected Void visitQuerySpecification(QuerySpecification node, MVAnalysisContext context)
+    protected Void visitQuerySpecification(QuerySpecification node, Void c)
     {
-        if (node.getLimit().isPresent()) {
-            throw new RuntimeException("Found Limit for query: " + context.queryId);
+        if (context.queryId.equalsIgnoreCase("20220328_131724_09160_dtzbu")) {
+            int i = 1;
+            System.out.println(i);
         }
-
         Optional<Relation> from = node.getFrom();
         if (from.isPresent()) {
             if (from.get() instanceof Table) {
-                process(from.get(), context);
+                process(from.get(), c);
             }
             else if (from.get() instanceof AliasedRelation) {
                 AliasedRelation aliasedRelation = (AliasedRelation) from.get();
                 if (aliasedRelation.getRelation() instanceof Table) {
-                    process(aliasedRelation.getRelation(), context);
+                    process(aliasedRelation.getRelation(), c);
                 }
             }
             else {
@@ -78,18 +77,18 @@ public class MVVisitor
         }
 
         Select select = node.getSelect();
-        process(select, context);
+        process(select, c);
 
         context.candidateFields = new TreeSet<>();
         Optional<Expression> where = node.getWhere();
         if (where.isPresent()) {
             Expression expression = where.get();
-            process(expression, context);
+            process(expression, c);
         }
 
         if (node.getGroupBy().isPresent()) {
             GroupBy groupBy = node.getGroupBy().get();
-            process(groupBy, context);
+            process(groupBy, c);
         }
 
         if (context.tableName != null && !context.candidateFields.isEmpty()) {
@@ -113,38 +112,32 @@ public class MVVisitor
     }
 
     @Override
-    protected Void visitIdentifier(Identifier node, MVAnalysisContext context)
+    protected Void visitIdentifier(Identifier node, Void c)
     {
         context.candidateFields.add(node.getValue());
-        return super.visitIdentifier(node, context);
+        return super.visitIdentifier(node, c);
     }
 
     @Override
-    protected Void visitFunctionCall(FunctionCall node, MVAnalysisContext context)
-    {
-        return super.visitFunctionCall(node, context);
-    }
-
-    @Override
-    protected Void visitSubqueryExpression(SubqueryExpression node, MVAnalysisContext context)
+    protected Void visitSubqueryExpression(SubqueryExpression node, Void c)
     {
         throw new RuntimeException("Found Subqueries for query: " + context.queryId);
     }
 
     @Override
-    protected Void visitOrderBy(OrderBy node, MVAnalysisContext context)
+    protected Void visitOrderBy(OrderBy node, Void c)
     {
         throw new RuntimeException("Found Order By for query: " + context.queryId);
     }
 
-    public Void visitTable(Table node, MVAnalysisContext context)
+    public Void visitTable(Table node, Void c)
     {
         context.tableName = node.getName().toString();
         return null;
     }
 
     @Override
-    protected Void visitSelect(Select select, MVAnalysisContext context)
+    protected Void visitSelect(Select select, Void c)
     {
         context.selectFields = new LinkedList<>();
 
@@ -167,7 +160,7 @@ public class MVVisitor
     }
 
     @Override
-    protected Void visitGroupBy(GroupBy groupBy, MVAnalysisContext context)
+    protected Void visitGroupBy(GroupBy groupBy, Void c)
     {
         if (!groupBy.getGroupingElements().isEmpty()) {
             for (GroupingElement groupingElement : groupBy.getGroupingElements()) {
@@ -176,13 +169,16 @@ public class MVVisitor
                     if (expression instanceof LongLiteral) {
                         context.candidateFields.add(context.selectFields.get((int) ((LongLiteral) expression).getValue() - 1));
                     }
-                    else {
+                    else if (expression instanceof Identifier) {
                         context.candidateFields.add(expression.toString());
+                    }
+                    else {
+                        process(expression);
                     }
                 }
             }
         }
 
-        return super.visitGroupBy(groupBy, context);
+        return super.visitGroupBy(groupBy, c);
     }
 }

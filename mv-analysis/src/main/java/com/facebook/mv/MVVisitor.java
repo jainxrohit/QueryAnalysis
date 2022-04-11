@@ -9,12 +9,10 @@ import com.facebook.presto.sql.tree.Identifier;
 import com.facebook.presto.sql.tree.LongLiteral;
 import com.facebook.presto.sql.tree.Node;
 import com.facebook.presto.sql.tree.OrderBy;
-import com.facebook.presto.sql.tree.Query;
 import com.facebook.presto.sql.tree.QuerySpecification;
 import com.facebook.presto.sql.tree.Relation;
 import com.facebook.presto.sql.tree.Select;
 import com.facebook.presto.sql.tree.SelectItem;
-import com.facebook.presto.sql.tree.SingleColumn;
 import com.facebook.presto.sql.tree.SubqueryExpression;
 import com.facebook.presto.sql.tree.Table;
 
@@ -45,12 +43,6 @@ public class MVVisitor
         context.resultWriter = resultWriter;
         context.errorsWriter = errorsWriter;
         this.process(node);
-    }
-
-    @Override
-    protected Void visitQuery(Query node, Void c)
-    {
-        return super.visitQuery(node, c);
     }
 
     @Override
@@ -115,7 +107,7 @@ public class MVVisitor
     protected Void visitIdentifier(Identifier node, Void c)
     {
         context.candidateFields.add(node.getValue());
-        return super.visitIdentifier(node, c);
+        return null;
     }
 
     @Override
@@ -140,22 +132,20 @@ public class MVVisitor
     protected Void visitSelect(Select select, Void c)
     {
         context.selectFields = new LinkedList<>();
-
-        List<SelectItem> selectItems = select.getSelectItems();
-        for (SelectItem selectItem : selectItems) {
-            if (selectItem instanceof SingleColumn) {
-                SingleColumn column = (SingleColumn) selectItem;
-                if (column.getAlias().isPresent()) {
-                    context.selectFields.add(String.valueOf(column.getAlias().get()));
-                }
-                else {
-                    context.selectFields.add(String.valueOf(column.getExpression()));
-                }
-            }
-            else {
-                context.selectFields.add(selectItem.toString());
-            }
-        }
+        // List<SelectItem> selectItems = select.getSelectItems();
+        //            if (selectItem instanceof SingleColumn) {
+        //                SingleColumn column = (SingleColumn) selectItem;
+        //                if (column.getAlias().isPresent()) {
+        //                    context.selectFields.add(String.valueOf(column.getAlias().get()));
+        //                }
+        //                else {
+        //                    context.selectFields.add(String.valueOf(column.getExpression()));
+        //                }
+        //            }
+        //            else {
+        //                context.selectFields.add(selectItem.toString());
+        //            }
+        context.selectFields.addAll(select.getSelectItems());
         return null;
     }
 
@@ -167,7 +157,8 @@ public class MVVisitor
                 List<Expression> expressions = groupingElement.getExpressions();
                 for (Expression expression : expressions) {
                     if (expression instanceof LongLiteral) {
-                        context.candidateFields.add(context.selectFields.get((int) ((LongLiteral) expression).getValue() - 1));
+                        SelectItem selectItem = context.selectFields.get((int) ((LongLiteral) expression).getValue() - 1);
+                        process(selectItem);
                     }
                     else if (expression instanceof Identifier) {
                         context.candidateFields.add(expression.toString());
@@ -179,6 +170,6 @@ public class MVVisitor
             }
         }
 
-        return super.visitGroupBy(groupBy, c);
+        return null;
     }
 }

@@ -18,13 +18,13 @@ import static java.lang.String.format;
 
 public class MVAnalysis
 {
-//    public static String FILE_NAME = "/Users/rohitism/work/prestosql/mv_analysis/unidash_queries_2022-03-28.txt";
-//    public static String OUT_FILE_NAME = "/Users/rohitism/work/prestosql/mv_analysis/unidash_queries_2022-03-28_results.txt";
-//    public static String ERR_FILE_NAME = "/Users/rohitism/work/prestosql/mv_analysis/unidash_queries_2022-03-28_errors.txt";
+    public static String FILE_NAME = "/Users/rohitism/work/prestosql/mv_analysis/2022-04-05/unidash_queries_2022-04-05.txt";
+    public static String OUT_FILE_NAME = "/Users/rohitism/work/prestosql/mv_analysis/2022-04-05/unidash_queries_2022-04-05_results.txt";
+    public static String ERR_FILE_NAME = "/Users/rohitism/work/prestosql/mv_analysis/2022-04-05/unidash_queries_2022-04-05_errors.txt";
 
-    public static String FILE_NAME = "/Users/rohitism/work/prestosql/mv_analysis/test.txt";
-    public static String OUT_FILE_NAME = "/Users/rohitism/work/prestosql/mv_analysis/test_results.txt";
-    public static String ERR_FILE_NAME = "/Users/rohitism/work/prestosql/mv_analysis/test_errors.txt";
+//    public static String FILE_NAME = "/Users/rohitism/work/prestosql/mv_analysis/2022-04-05/test.txt";
+//    public static String OUT_FILE_NAME = "/Users/rohitism/work/prestosql/mv_analysis/2022-04-05/test_results.txt";
+//    public static String ERR_FILE_NAME = "/Users/rohitism/work/prestosql/mv_analysis/2022-04-05/test_errors.txt";
 
     public static String DELIMITER = "__DEL__";
     public static final SqlParser sqlParser = new SqlParser(new SqlParserOptions().allowIdentifierSymbol(AT_SIGN, COLON));
